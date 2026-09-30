@@ -22,7 +22,21 @@
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-thumb { background: #444; }
         
-        .leaflet-popup-content { color: #000 !important; font-family: sans-serif; font-size: 12px; }
+        /* Tactical Dark Popups */
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: rgba(15, 15, 15, 0.95) !important;
+            color: #00ff00 !important;
+            border: 1px solid #333;
+            box-shadow: 0 0 15px rgba(0,0,0,0.9);
+        }
+        .leaflet-popup-content { font-family: monospace; font-size: 12px; }
+        .leaflet-container a.leaflet-popup-close-button { color: #ff3333 !important; }
+
+        /* Radar Pulse Animation */
+        @keyframes radar-pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(3.5); opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -34,7 +48,6 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // 1. Initialize Tactical Dark Map
         const map = L.map('map', {zoomControl: false}).setView([28.6139, 77.2090], 11);
         L.control.zoom({position: 'topright'}).addTo(map);
 
@@ -45,7 +58,6 @@
 
         const feedDiv = document.getElementById('feed');
         
-        // Define threat colors
         const colors = {
             'CROWD_HAZARD': '#ffaa00',
             'CIVIL_UNREST': '#ff3333',
@@ -56,31 +68,29 @@
         function addIncident(incident) {
             const color = colors[incident.category] || '#ffffff';
             
-            // Plot on Map
-            const marker = L.circleMarker([incident.lat, incident.lng], {
-                radius: 7,
-                fillColor: color,
-                color: color,
-                weight: 1,
-                opacity: 1,
-                fillOpacity: 0.5
-            }).addTo(map);
-            
+            const pulseIcon = L.divIcon({
+                className: 'custom-pulse-icon',
+                html: `<div style="background:${color}; width:12px; height:12px; border-radius:50%; position:relative; box-shadow: 0 0 8px ${color};">
+                           <div style="background:${color}; width:100%; height:100%; border-radius:50%; position:absolute; top:0; left:0; animation: radar-pulse 1.5s ease-out infinite;"></div>
+                       </div>`,
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            });
+
+            const marker = L.marker([incident.lat, incident.lng], {icon: pulseIcon}).addTo(map);
             marker.bindPopup(`<strong>${incident.category}</strong><br><br>${incident.description}`);
 
-            // Append to Sidebar
             const time = new Date(incident.ingested_at || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             const entry = document.createElement('div');
             entry.className = 'incident';
             entry.style.borderLeftColor = color;
             entry.innerHTML = `
-                <div class="incident-meta">[${time}] <span class="category-tag" style="background:${color}">${incident.category}</span></div>
+                <div class="incident-meta">[${time}] <span class="category-tag" style="background:${color}; color:#000;">${incident.category}</span></div>
                 <div>${incident.description}</div>
             `;
             feedDiv.prepend(entry);
         }
 
-        // 2. Fetch Historical Database Context
         fetch('https://nagrik-grid-backend.onrender.com/api/incidents')
             .then(res => res.json())
             .then(data => {
@@ -90,7 +100,6 @@
                 }
             }).catch(e => feedDiv.innerHTML = 'Error loading grid data.');
 
-        // 3. Connect WebSocket for Real-Time Live Feed
         const ws = new WebSocket('wss://nagrik-grid-backend.onrender.com/ws');
         ws.onmessage = (event) => {
             const payload = JSON.parse(event.data);
